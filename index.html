@@ -5,7 +5,6 @@
   <title>Controle Financeiro Compartilhado</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script type="module">
-    // Importação Firebase Modular
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import {
       getFirestore,
@@ -16,7 +15,6 @@
       orderBy
     } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-    // Configuração do Firebase
     const firebaseConfig = {
       apiKey: "AIzaSyCXSzakKGK37BRGa7AoMb-XME6rC75qhqM",
       authDomain: "controle-financeiro-eaf39.firebaseapp.com",
@@ -35,14 +33,12 @@
     let chartProgresso = null;
     let chartGastos = null;
 
-    // Função para formatar em moeda BRL
     const formatarMoeda = valor =>
       new Intl.NumberFormat("pt-BR", {
         style: "currency",
         currency: "BRL"
       }).format(valor);
 
-    // Função Calcular Meta
     window.calcular = function () {
       const salario = parseFloat(document.getElementById('salario').value);
       const porcentagem = parseFloat(document.getElementById('porcentagem').value) / 100;
@@ -58,9 +54,9 @@
         ⏳ Vai atingir a meta de <strong>${formatarMoeda(meta)}</strong> em aproximadamente <strong>${meses} meses</strong>.
       `;
       document.getElementById('resultado').innerHTML = resultado;
+      atualizarResumoGastos();
     }
 
-    // Função Salvar Progresso
     window.salvarProgresso = async function () {
       const salario = parseFloat(document.getElementById('salario').value);
       const porcentagem = parseFloat(document.getElementById('porcentagem').value);
@@ -77,7 +73,6 @@
       alert("✅ Progresso salvo com sucesso!");
     }
 
-    // Função Acompanhar Progresso
     window.acompanharProgresso = function () {
       const guardado = parseFloat(document.getElementById('guardado').value);
       const meta = parseFloat(document.getElementById('meta').value);
@@ -118,7 +113,6 @@
       });
     }
 
-    // Função Adicionar Gasto
     window.adicionarGasto = async function () {
       const categoria = document.getElementById('categoria').value.trim();
       const valor = parseFloat(document.getElementById('valorGasto').value);
@@ -139,7 +133,6 @@
       carregarGastos();
     }
 
-    // Função Carregar Gastos
     async function carregarGastos() {
       const q = query(collection(db, "gastos"), orderBy("data", "desc"));
       const snapshot = await getDocs(q);
@@ -151,6 +144,7 @@
 
       atualizarTabela();
       atualizarGrafico();
+      atualizarResumoGastos();
     }
 
     function atualizarTabela() {
@@ -192,7 +186,27 @@
       });
     }
 
-    // Carrega dados ao abrir a página
+    function atualizarResumoGastos() {
+      const salario = parseFloat(document.getElementById('salario').value);
+      const totalGastos = gastos.reduce((acc, g) => acc + g.valor, 0);
+      const percentual = salario ? ((totalGastos / salario) * 100).toFixed(2) : 0;
+
+      let cor = '#8bc34a'; // verde
+      if (percentual >= 80) cor = '#f44336'; // vermelho
+      else if (percentual >= 50) cor = '#ff9800'; // amarelo
+
+      const resumoDiv = `
+        <div style="margin-top: 20px; background: #2d2d2d; padding: 15px; border-radius: 8px; color: ${cor}; border-left: 6px solid ${cor};">
+          💸 <strong>Total de Gastos:</strong> ${formatarMoeda(totalGastos)}<br>
+          📉 <strong>Gastos representam:</strong> ${percentual}% do salário.
+        </div>
+      `;
+
+      // Limpa e exibe novo conteúdo
+      const resultado = document.getElementById('resultado');
+      resultado.insertAdjacentHTML('beforeend', resumoDiv);
+    }
+
     window.onload = () => {
       carregarGastos();
       calcular();
