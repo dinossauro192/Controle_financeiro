@@ -5,10 +5,13 @@ import {
   addDoc,
   getDocs,
   query,
-  orderBy
+  orderBy,
+  doc,
+  updateDoc,
+  deleteDoc
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// Config Firebase (copie sua config real aqui)
+// Config Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyCXSzakKGK37BRGa7AoMb-XME6rC75qhqM",
   authDomain: "controle-financeiro-eaf39.firebaseapp.com",
@@ -49,8 +52,8 @@ async function carregarGastos() {
   const q = query(collection(db, "gastos"), orderBy("data", "desc"));
   const snapshot = await getDocs(q);
   gastos = [];
-  snapshot.forEach(doc => {
-    gastos.push(doc.data());
+  snapshot.forEach(docSnap => {
+    gastos.push({ id: docSnap.id, ...docSnap.data() });
   });
   atualizarTabela();
   atualizarGrafico();
@@ -58,36 +61,59 @@ async function carregarGastos() {
 
 function atualizarTabela() {
   tabelaBody.innerHTML = "";
-  gastos.forEach(g => {
-    tabelaBody.innerHTML += `<tr><td>${g.categoria}</td><td>${formatarMoeda(g.valor)}</td></tr>`;
+
+  gastos.forEach(gasto => {
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+      <td class="categoria">${gasto.categoria}</td>
+      <td class="valor">${formatarMoeda(gasto.valor)}</td>
+      <td><button class="btn-editar">✏️</button></td>
+      <td><button class="btn-remover">🗑️</button></td>
+    `;
+
+    tabelaBody.appendChild(tr);
+
+    const btnEditar = tr.querySelector(".btn-editar");
+    btnEditar.onclick = () => editarGasto(gasto.id, tr);
+
+    const btnRemover = tr.querySelector(".btn-remover");
+    btnRemover.onclick = () => removerGasto(gasto.id);
   });
 }
 
-function atualizarGrafico() {
-  const categorias = {};
-  gastos.forEach(g => {
-    categorias[g.categoria] = (categorias[g.categoria] || 0) + g.valor;
-  });
+function editarGasto(id, tr) {
+  const categoriaTd = tr.querySelector(".categoria");
+  const valorTd = tr.querySelector(".valor");
 
-  if (chartGastos) chartGastos.destroy();
+  const gastoAtual = gastos.find(g => g.id === id);
 
-  chartGastos = new Chart(graficoCanvas, {
-    type: "doughnut",
-    data: {
-      labels: Object.keys(categorias),
-      datasets: [{
-        data: Object.values(categorias),
-        backgroundColor: ["#4caf50", "#ff9800", "#2196f3", "#e91e63", "#9c27b0"]
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { position: "bottom" },
-        title: { display: true, text: "💸 Distribuição de Gastos" }
-      }
+  categoriaTd.innerHTML = `<input type="text" value="${gastoAtual.categoria}" />`;
+  valorTd.innerHTML = `<input type="number" value="${gastoAtual.valor}" />`;
+
+  const btnEditar = tr.querySelector(".btn-editar");
+  btnEditar.textContent = "💾";
+  btnEditar.onclick = async () => {
+    const novaCategoria = categoriaTd.querySelector("input").value.trim();
+    const novoValor = parseFloat(valorTd.querySelector("input").value);
+
+    if (!novaCategoria || isNaN(novoValor) || novoValor <= 0) {
+      alert("❌ Informe categoria válida e valor maior que zero.");
+      return;
     }
-  });
+
+    const gastoDoc = doc(db, "gastos", id);
+    await updateDoc(gastoDoc, { categoria: novaCategoria, valor: novoValor });
+
+    carregarGastos();
+  };
+}
+
+async function removerGasto(id) {
+  if (!confirm("Tem certeza que deseja remover este gasto?")) return;
+
+  await deleteDoc(doc(db, "gastos", id));
+  carregarGastos();
 }
 
 function calcular() {
@@ -194,7 +220,6 @@ function abrirGraficoComprometimento() {
   window.open(`grafico-salario.html?${params.toString()}`, "_blank");
 }
 
-// Inicializar dados
 window.onload = () => {
   carregarGastos();
   calcular();

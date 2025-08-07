@@ -65,3 +65,10 @@ th {
 canvas {
   margin-top: 30px;
 }
+button.btn-editar,
+button.btn-remover {
+  width: auto;
+  padding: 6px 10px;
+  font-size: 16px;
+  line-height: 1;
+}
