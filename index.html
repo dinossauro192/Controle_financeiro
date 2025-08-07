@@ -1,310 +1,49 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Controle Financeiro Compartilhado</title>
+  <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import {
-      getFirestore,
-      collection,
-      addDoc,
-      getDocs,
-      query,
-      orderBy
-    } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyCXSzakKGK37BRGa7AoMb-XME6rC75qhqM",
-      authDomain: "controle-financeiro-eaf39.firebaseapp.com",
-      databaseURL: "https://controle-financeiro-eaf39-default-rtdb.firebaseio.com",
-      projectId: "controle-financeiro-eaf39",
-      storageBucket: "controle-financeiro-eaf39.appspot.com",
-      messagingSenderId: "429418759950",
-      appId: "1:429418759950:web:bd65f5d8d93b4d688af95f",
-      measurementId: "G-Z6F1C0EVGG"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-
-    let gastos = [];
-    let chartProgresso = null;
-    let chartGastos = null;
-
-    const formatarMoeda = valor =>
-      new Intl.NumberFormat("pt-BR", {
-        style: "currency",
-        currency: "BRL"
-      }).format(valor);
-
-    window.calcular = function () {
-      const salario = parseFloat(document.getElementById('salario').value);
-      const porcentagem = parseFloat(document.getElementById('porcentagem').value) / 100;
-      const meta = parseFloat(document.getElementById('meta').value);
-      const guardado = parseFloat(document.getElementById('guardado').value);
-
-      const economiaMensal = salario * porcentagem;
-      const restante = meta - guardado;
-      const meses = Math.ceil(restante / economiaMensal);
-
-      const resultado = `
-        ✅ Você economiza <strong>${formatarMoeda(economiaMensal)}</strong> por mês.<br>
-        ⏳ Vai atingir a meta de <strong>${formatarMoeda(meta)}</strong> em aproximadamente <strong>${meses} meses</strong>.
-      `;
-      document.getElementById('resultado').innerHTML = resultado;
-      atualizarResumoGastos();
-    }
-
-    window.salvarProgresso = async function () {
-      const salario = parseFloat(document.getElementById('salario').value);
-      const porcentagem = parseFloat(document.getElementById('porcentagem').value);
-      const meta = parseFloat(document.getElementById('meta').value);
-      const guardado = parseFloat(document.getElementById('guardado').value);
-
-      await addDoc(collection(db, "progresso"), {
-        salario,
-        porcentagem,
-        meta,
-        guardado,
-        data: new Date()
-      });
-      alert("✅ Progresso salvo com sucesso!");
-    }
-
-    window.acompanharProgresso = function () {
-      const guardado = parseFloat(document.getElementById('guardado').value);
-      const meta = parseFloat(document.getElementById('meta').value);
-      const totalGastos = gastos.reduce((acc, g) => acc + g.valor, 0);
-      const falta = Math.max(meta - guardado, 0);
-
-      const ctx = document.getElementById('graficoProgresso').getContext('2d');
-      if (chartProgresso) chartProgresso.destroy();
-
-      chartProgresso = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: ['Gastos Totais', 'Valor Guardado', 'Falta para Meta'],
-          datasets: [{
-            label: 'R$',
-            data: [totalGastos, guardado, falta],
-            backgroundColor: ['#f44336', '#4caf50', '#ff9800']
-          }]
-        },
-        options: {
-          responsive: true,
-          plugins: {
-            legend: { display: false },
-            title: {
-              display: true,
-              text: '📊 Progresso Financeiro'
-            }
-          },
-          scales: {
-            y: {
-              beginAtZero: true,
-              ticks: {
-                callback: value => `R$ ${value}`
-              }
-            }
-          }
-        }
-      });
-    }
-
-    window.adicionarGasto = async function () {
-      const categoria = document.getElementById('categoria').value.trim();
-      const valor = parseFloat(document.getElementById('valorGasto').value);
-
-      if (!categoria || isNaN(valor) || valor <= 0) {
-        alert("❌ Informe uma categoria e valor válido maior que zero.");
-        return;
-      }
-
-      await addDoc(collection(db, "gastos"), {
-        categoria,
-        valor,
-        data: new Date()
-      });
-
-      document.getElementById('categoria').value = '';
-      document.getElementById('valorGasto').value = '';
-      carregarGastos();
-    }
-
-    async function carregarGastos() {
-      const q = query(collection(db, "gastos"), orderBy("data", "desc"));
-      const snapshot = await getDocs(q);
-
-      gastos = [];
-      snapshot.forEach(doc => {
-        gastos.push(doc.data());
-      });
-
-      atualizarTabela();
-      atualizarGrafico();
-      atualizarResumoGastos();
-    }
-
-    function atualizarTabela() {
-      const tbody = document.querySelector('#tabelaGastos tbody');
-      tbody.innerHTML = '';
-      gastos.forEach(g => {
-        tbody.innerHTML += `<tr><td>${g.categoria}</td><td>${formatarMoeda(g.valor)}</td></tr>`;
-      });
-    }
-
-    function atualizarGrafico() {
-      const categorias = {};
-      gastos.forEach(g => {
-        categorias[g.categoria] = (categorias[g.categoria] || 0) + g.valor;
-      });
-
-      const ctx = document.getElementById('grafico').getContext('2d');
-      if (chartGastos) chartGastos.destroy();
-
-      chartGastos = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-          labels: Object.keys(categorias),
-          datasets: [{
-            data: Object.values(categorias),
-            backgroundColor: ['#4caf50', '#ff9800', '#2196f3', '#e91e63', '#9c27b0']
-          }]
-        },
-        options: {
-          responsive: true,
-          plugins: {
-            legend: { position: 'bottom' },
-            title: {
-              display: true,
-              text: '💸 Distribuição de Gastos'
-            }
-          }
-        }
-      });
-    }
-
-    function atualizarResumoGastos() {
-      const salario = parseFloat(document.getElementById('salario').value);
-      const totalGastos = gastos.reduce((acc, g) => acc + g.valor, 0);
-      const percentual = salario ? ((totalGastos / salario) * 100).toFixed(2) : 0;
-
-      let cor = '#8bc34a'; // verde
-      if (percentual >= 80) cor = '#f44336'; // vermelho
-      else if (percentual >= 50) cor = '#ff9800'; // amarelo
-
-      const resumoDiv = `
-        <div style="margin-top: 20px; background: #2d2d2d; padding: 15px; border-radius: 8px; color: ${cor}; border-left: 6px solid ${cor};">
-          💸 <strong>Total de Gastos:</strong> ${formatarMoeda(totalGastos)}<br>
-          📉 <strong>Gastos representam:</strong> ${percentual}% do salário.
-        </div>
-      `;
-
-      // Limpa e exibe novo conteúdo
-      const resultado = document.getElementById('resultado');
-      resultado.insertAdjacentHTML('beforeend', resumoDiv);
-    }
-
-    window.onload = () => {
-      carregarGastos();
-      calcular();
-    };
-  </script>
-
-  <style>
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      background: #1e1e2f;
-      color: #f0f0f0;
-      margin: 0;
-      padding: 20px;
-    }
-    .container {
-      max-width: 900px;
-      margin: auto;
-      background: #2a2a3d;
-      padding: 30px;
-      border-radius: 12px;
-      box-shadow: 0 0 20px rgba(0,0,0,0.5);
-    }
-    h1, h2 { color: #ffffff; }
-    label { display: block; margin: 10px 0 5px; font-weight: 600; }
-    input, button {
-      width: 100%;
-      padding: 10px;
-      margin-bottom: 15px;
-      border-radius: 6px;
-      border: none;
-    }
-    input {
-      background: #1e1e2f;
-      color: #f0f0f0;
-      border: 1px solid #555;
-    }
-    button {
-      background: #4caf50;
-      color: white;
-      font-weight: bold;
-      cursor: pointer;
-    }
-    button:hover { background: #45a049; }
-    .result-box {
-      background: #333c33;
-      padding: 15px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      color: #a5d6a7;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 20px;
-    }
-    th, td {
-      padding: 10px;
-      border-bottom: 1px solid #444;
-      text-align: left;
-    }
-    th { background: #3a3a4d; }
-    canvas { margin-top: 30px; }
-  </style>
 </head>
 <body>
   <div class="container">
     <h1>💰 Controle Financeiro Compartilhado</h1>
 
     <label>Salário Mensal (R$)</label>
-    <input type="number" id="salario" value="4000">
+    <input type="number" id="salario" value="4000" />
 
     <label>Porcentagem para Economizar (%)</label>
-    <input type="number" id="porcentagem" value="20">
+    <input type="number" id="porcentagem" value="20" />
 
     <label>Meta de Economia (R$)</label>
-    <input type="number" id="meta" value="10000">
+    <input type="number" id="meta" value="10000" />
 
     <label>Valor já guardado (R$)</label>
-    <input type="number" id="guardado" value="2500">
+    <input type="number" id="guardado" value="2500" />
 
-    <button onclick="calcular()">🧮 Calcular</button>
-    <button onclick="salvarProgresso()">💾 Salvar Progresso</button>
-    <button onclick="acompanharProgresso()">📊 Acompanhar Progresso</button>
+    <button id="btnCalcular">🧮 Calcular</button>
+    <button id="btnSalvar">💾 Salvar Progresso</button>
+    <button id="btnAcompanhar">📊 Acompanhar Progresso</button>
+    <button id="btnVerComprometimento">📈 Ver Comprometimento do Salário</button>
 
     <div class="result-box" id="resultado"></div>
 
     <h2>🧾 Adicionar Gasto</h2>
     <label>Categoria</label>
-    <input type="text" id="categoria" placeholder="Ex: Farmácia, Cinema, Uber">
+    <input type="text" id="categoria" placeholder="Ex: Farmácia, Cinema, Uber" />
 
     <label>Valor (R$)</label>
-    <input type="number" id="valorGasto">
+    <input type="number" id="valorGasto" />
 
-    <button onclick="adicionarGasto()">➕ Adicionar Gasto</button>
+    <button id="btnAdicionarGasto">➕ Adicionar Gasto</button>
 
     <table id="tabelaGastos">
       <thead>
-        <tr><th>Categoria</th><th>Valor (R$)</th></tr>
+        <tr>
+          <th>Categoria</th>
+          <th>Valor (R$)</th>
+        </tr>
       </thead>
       <tbody></tbody>
     </table>
@@ -312,5 +51,7 @@
     <canvas id="grafico" height="200"></canvas>
     <canvas id="graficoProgresso" height="200"></canvas>
   </div>
+
+  <script type="module" src="script.js"></script>
 </body>
 </html>
